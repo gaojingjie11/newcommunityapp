@@ -19,6 +19,15 @@ const normalizeErrorMessage = (msg, fallback = '请求失败') => {
   return text;
 };
 
+const isAuthRequest = (url) => {
+  const path = String(url || '');
+  return path.includes('/users/login') ||
+         path.includes('/users/register') ||
+         path.includes('/users/sms-code') ||
+         path.includes('/users/login-code') ||
+         path.includes('/users/password-reset');
+};
+
 const request = (options) => {
   return new Promise((resolve, reject) => {
     const token = uni.getStorageSync('token');
@@ -47,9 +56,12 @@ const request = (options) => {
           }
 
           if (data.code === 401) {
-            if (hasToken) {
-              uni.removeStorageSync('token');
-              uni.redirectTo({ url: '/pages/auth/login' });
+            uni.removeStorageSync('token');
+            if (!isAuthRequest(options.url)) {
+              uni.showToast({ title: '请先登录', icon: 'none' });
+              setTimeout(() => {
+                uni.redirectTo({ url: '/pages/auth/login' });
+              }, 1000);
             }
             reject(data);
             return;
@@ -64,9 +76,12 @@ const request = (options) => {
         }
 
         if (res.statusCode === 401) {
-          if (hasToken) {
-            uni.removeStorageSync('token');
-            uni.redirectTo({ url: '/pages/auth/login' });
+          uni.removeStorageSync('token');
+          if (!isAuthRequest(options.url)) {
+            uni.showToast({ title: '请先登录', icon: 'none' });
+            setTimeout(() => {
+              uni.redirectTo({ url: '/pages/auth/login' });
+            }, 1000);
           }
         }
 

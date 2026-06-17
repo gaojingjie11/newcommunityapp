@@ -105,7 +105,7 @@ export default {
         return request({
             url: '/community/parking-spaces/my',
             method: 'GET'
-        });
+        }).then(res => res?.list || res || []);
     },
 
     bindCar(data) {
