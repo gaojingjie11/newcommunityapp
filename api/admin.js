@@ -1,10 +1,9 @@
 import request from '../utils/request';
 
-
 export default {
     getAIReportList(params) {
         return request({
-            url: '/admin/ai-report/list',
+            url: '/statistics/ai-report/list',
             method: 'GET',
             data: params
         });
@@ -12,7 +11,7 @@ export default {
 
     generateAIReport() {
         return request({
-            url: '/admin/ai-report/generate',
+            url: '/statistics/ai-report/generate',
             method: 'POST',
             timeout: 120000
         });
@@ -20,7 +19,7 @@ export default {
 
     getAIReportDetail(id) {
         return request({
-            url: `/admin/ai-report/${id}`,
+            url: `/statistics/ai-report/${id}`,
             method: 'GET'
         });
     }

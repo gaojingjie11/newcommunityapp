@@ -1,4 +1,4 @@
-const BASE_URL = 'http://42.193.104.173:8082/api/v1';
+const BASE_URL = 'https://api.communitysvc.xyz/api';
 
 const normalizeErrorMessage = (msg, fallback = '请求失败') => {
   const text = String(msg || '').trim();
@@ -41,7 +41,7 @@ const request = (options) => {
       success: (res) => {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           const data = res.data || {};
-          if (data.code === 200) {
+          if (data.code === 200 || data.code === 0) {
             resolve(data.data);
             return;
           }

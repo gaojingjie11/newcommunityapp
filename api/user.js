@@ -9,21 +9,35 @@ function registerFace(filePath) {
         }
 
         uni.uploadFile({
-            url: `${BASE_URL}/user/face/register`,
+            url: `${BASE_URL}/upload`,
             filePath,
             name: 'file',
             header,
+            formData: {
+                dir: 'face'
+            },
             success: (res) => {
                 let data = {};
                 try {
                     data = JSON.parse(res.data || '{}');
                 } catch (e) {
-                    reject(new Error('人脸录入响应解析失败'));
+                    reject(new Error('人脸图片上传响应解析失败'));
                     return;
                 }
 
-                if (res.statusCode >= 200 && res.statusCode < 300 && data.code === 200) {
-                    resolve(data.data);
+                if (res.statusCode >= 200 && res.statusCode < 300 && (data.code === 200 || data.code === 0)) {
+                    const faceImageUrl = data?.data?.url || data?.url || (typeof data?.data === 'string' ? data.data : '');
+                    if (!faceImageUrl) {
+                        reject(new Error('人脸图片上传成功但未返回地址'));
+                        return;
+                    }
+                    
+                    // Call register API
+                    request({
+                        url: '/users/me/face',
+                        method: 'POST',
+                        data: { face_image_url: faceImageUrl }
+                    }).then(resolve).catch(reject);
                     return;
                 }
 
@@ -31,9 +45,9 @@ function registerFace(filePath) {
                     uni.removeStorageSync('token');
                     uni.redirectTo({ url: '/pages/auth/login' });
                 }
-                reject(new Error(data.msg || '人脸录入失败'));
+                reject(new Error(data.msg || '人脸图片上传失败'));
             },
-            fail: (err) => reject(err || new Error('人脸录入失败'))
+            fail: (err) => reject(err || new Error('人脸图片上传失败'))
         });
     });
 }
@@ -41,23 +55,23 @@ function registerFace(filePath) {
 export default {
     getUserInfo() {
         return request({
-            url: '/user/info',
+            url: '/users/me',
             method: 'GET'
         });
     },
 
     updateUserInfo(data) {
         return request({
-            url: '/user/update',
-            method: 'POST',
+            url: '/users/me',
+            method: 'PUT',
             data
         });
     },
 
     changePassword(data) {
         return request({
-            url: '/user/change_password',
-            method: 'POST',
+            url: '/users/me/password',
+            method: 'PUT',
             data
         });
     },

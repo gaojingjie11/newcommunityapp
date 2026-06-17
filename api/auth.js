@@ -5,7 +5,7 @@ export default {
     // 用户注册
     register(data) {
         return request({
-            url: '/register',
+            url: '/users/register',
             method: 'POST',
             data
         });
@@ -14,7 +14,7 @@ export default {
     // 用户登录
     login(data) {
         return request({
-            url: '/login',
+            url: '/users/login',
             method: 'POST',
             data
         });
@@ -23,7 +23,7 @@ export default {
     // 退出登录
     logout() {
         return request({
-            url: '/logout',
+            url: '/users/logout',
             method: 'POST'
         });
     },
@@ -31,7 +31,7 @@ export default {
     // 获取用户信息
     getUserInfo() {
         return request({
-            url: '/user/info',
+            url: '/users/me',
             method: 'GET'
         });
     },
@@ -39,8 +39,8 @@ export default {
     // 更新用户信息
     updateUserInfo(data) {
         return request({
-            url: '/user/update',
-            method: 'POST',
+            url: '/users/me',
+            method: 'PUT',
             data
         });
     },
@@ -48,8 +48,8 @@ export default {
     // 修改密码
     changePassword(data) {
         return request({
-            url: '/user/change_password',
-            method: 'POST',
+            url: '/users/me/password',
+            method: 'PUT',
             data
         });
     },
@@ -57,7 +57,7 @@ export default {
     // 发送验证码
     sendCode(data) {
         return request({
-            url: '/send_code',
+            url: '/users/sms-code',
             method: 'POST',
             data
         });
@@ -66,7 +66,7 @@ export default {
     // 验证码登录
     loginCode(data) {
         return request({
-            url: '/login_code',
+            url: '/users/login-code',
             method: 'POST',
             data
         });
