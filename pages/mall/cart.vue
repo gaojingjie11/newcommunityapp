@@ -45,7 +45,7 @@ export default createPage(pageDef);
 
 <style>
 .cart-page {
-  padding: 24rpx 24rpx calc(180rpx + env(safe-area-inset-bottom));
+  padding: 24rpx 24rpx calc(200rpx + env(safe-area-inset-bottom));
   min-height: 100vh;
   background: var(--bg-page);
 }
@@ -151,7 +151,7 @@ export default createPage(pageDef);
   right: 0;
   background: #fff;
   border-top: 2rpx solid var(--border-color);
-  padding: 20rpx 24rpx calc(20rpx + env(safe-area-inset-bottom));
+  padding: 28rpx 32rpx calc(28rpx + env(safe-area-inset-bottom));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -172,5 +172,6 @@ export default createPage(pageDef);
 
 .checkout-btn {
   min-width: 240rpx;
+  margin: 0;
 }
 </style>
