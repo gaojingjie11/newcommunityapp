@@ -229,14 +229,16 @@ export default {
         this.setData({ loading: true });
         try {
             const res = await getAIReportDetail(id);
+            const reportData = res && res.report ? res.report : res;
+            const markdown = (reportData && (reportData.report_markdown || reportData.report)) || '';
             this.setData({
                 report: {
-                    ...res,
-                    created_at_text: formatDateTime(res.created_at),
-                    property_paid_amount_text: formatAmount(res.property_paid_amount)
+                    ...reportData,
+                    created_at_text: formatDateTime(reportData.created_at),
+                    property_paid_amount_text: formatAmount(reportData.property_paid_amount)
                 },
-                reportText: res.report || '',
-                reportHtml: markdownToHtml(res.report || '')
+                reportText: markdown,
+                reportHtml: markdownToHtml(markdown)
             });
         } catch (e) {
             console.error(e);

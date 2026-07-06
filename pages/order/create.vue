@@ -19,7 +19,7 @@
       <view class="order-items">
         <template v-for="item in cartItems" :key="item.id">
           <view class="item">
-            <image class="item-img" :src="item.product.image_url || '/assets/icons/mall.png'" mode="aspectFill"></image>
+            <image class="item-img" :src="item.product.image_url || '/static/mall.png'" mode="aspectFill"></image>
             <view class="item-info">
               <view class="name">{{item.product.name}}</view>
               <view class="price">￥{{item.product.price}} x {{item.quantity}}</view>

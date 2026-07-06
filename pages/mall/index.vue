@@ -43,7 +43,7 @@
   <view class="product-grid">
     <template v-for="item in products" :key="item.id">
       <navigator :url="'/pages/mall/detail?id=' + item.id" class="product-card">
-        <image class="product-img" :src="item.image_url || '/assets/icons/mall.png'" mode="aspectFill"></image>
+        <image class="product-img" :src="item.image_url || '/static/mall.png'" mode="aspectFill"></image>
         <view class="product-info">
           <view class="product-name">{{ item.name }}</view>
           <view class="product-price">

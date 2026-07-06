@@ -1,6 +1,6 @@
 <template>
 <view class="detail-page page-shell">
-  <image class="detail-image" :src="product.image_url || '/assets/icons/mall.png'" mode="aspectFill"></image>
+  <image class="detail-image" :src="product.image_url || '/static/mall.png'" mode="aspectFill"></image>
 
   <view class="detail-info card">
     <view class="detail-title">{{product.name}}</view>

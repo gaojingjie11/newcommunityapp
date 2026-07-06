@@ -31,7 +31,7 @@
 
   <template v-else>
     <view class="empty-state card">
-      <image src="/assets/icons/service.png" mode="widthFix" class="empty-icon"></image>
+      <image src="/static/service.png" mode="widthFix" class="empty-icon"></image>
       <view class="empty-text">您名下暂无车位信息</view>
       <view class="empty-sub">请联系物业管理处办理车位租赁或购买</view>
     </view>

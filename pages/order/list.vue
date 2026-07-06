@@ -27,7 +27,7 @@
         <view class="order-body">
           <template v-for="prod in item.items" :key="prod.id">
             <view class="prod-row">
-              <image class="prod-img" :src="prod.product.image_url || '/assets/icons/mall.png'" mode="aspectFill"></image>
+              <image class="prod-img" :src="prod.product.image_url || '/static/mall.png'" mode="aspectFill"></image>
               <view class="prod-info">
                 <view class="prod-name">{{prod.product.name}}</view>
                 <view class="prod-meta">￥{{prod.price}} x {{prod.quantity}}</view>

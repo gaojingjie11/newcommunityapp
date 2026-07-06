@@ -3,7 +3,7 @@
   <view class="cart-list" v-if="cartItems.length > 0">
     <template v-for="(item, index) in cartItems" :key="item.id">
       <view class="cart-item card">
-        <image class="item-image" :src="item.product.image_url || '/assets/icons/mall.png'" mode="aspectFill"></image>
+        <image class="item-image" :src="item.product.image_url || '/static/mall.png'" mode="aspectFill"></image>
         <view class="item-info">
           <view class="item-name">{{item.product.name}}</view>
           <view class="item-price">￥{{item.product.price}}</view>

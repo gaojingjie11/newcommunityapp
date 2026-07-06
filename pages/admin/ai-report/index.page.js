@@ -74,7 +74,7 @@ export default {
                 page: this.data.page,
                 size: this.data.size
             });
-            const rawList = res.list || [];
+            const rawList = res.list || (Array.isArray(res) ? res : []);
             const mapped = rawList.map((item) => ({
                 ...item,
                 created_at_text: formatDateTime(item.created_at)

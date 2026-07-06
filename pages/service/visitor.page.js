@@ -101,11 +101,16 @@ export default {
 
             // Format dates
             list = list.map(item => {
-                const date = new Date(item.visit_time);
-                const isValid = !isNaN(date.getTime()) && date.getFullYear() > 2000;
+                const rawTime = item.visit_time || item.release_time || '';
+                let displayTime = '';
+                if (rawTime) {
+                    const normalizedTime = String(rawTime).replace(/-/g, '/').replace('T', ' ').replace(/\.\d+Z?$/, '');
+                    const date = new Date(normalizedTime);
+                    displayTime = (!isNaN(date.getTime()) && date.getFullYear() > 2000) ? formatTime(date) : rawTime;
+                }
                 return {
                     ...item,
-                    visit_time: isValid ? formatTime(date) : '',
+                    visit_time: displayTime,
                     visitor_mobile: item.mobile || item.visitor_phone || item.visitor_mobile, // Ensure mobile shows
                     visitor_name: item.name || item.visitor_name // Ensure name shows (model uses 'name')
                 };
