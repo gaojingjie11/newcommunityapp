@@ -72,7 +72,7 @@
           <view class="rank-no">#{{ item.rank || index + 1 }}</view>
           <image
             class="rank-avatar"
-            :src="item.avatar || '/assets/icons/user.png'"
+            :src="item.avatar || '/static/tabbar/user.png'"
             mode="aspectFill"
           />
           <view class="rank-info">

@@ -24,7 +24,7 @@
     <view class="comment-list">
       <template v-for="item in comments" :key="item.id">
         <view class="comment-item">
-          <image class="comment-avatar" :src="item.user.avatar || '/assets/icons/user.png'"></image>
+          <image class="comment-avatar" :src="item.user.avatar || '/static/tabbar/user.png'"></image>
           <view class="comment-body">
             <view class="comment-header">
               <text class="username">{{item.user.real_name || item.user.username || '匿名用户'}}</text>

@@ -11,7 +11,7 @@
     <view class="user-header card">
       <template v-if="userInfo">
         <view class="user-info-row">
-          <image class="avatar" :src="userInfo.avatar || '/assets/icons/user.png'" mode="aspectFill"></image>
+          <image class="avatar" :src="userInfo.avatar || '/static/tabbar/user.png'" mode="aspectFill"></image>
           <view class="info-col">
             <view class="name-row">
               <text class="name">{{userInfo.real_name || userInfo.username}}</text>
@@ -39,7 +39,7 @@
 
       <template v-else>
         <view class="unlogin-view" @tap="goToLogin">
-          <image class="avatar" src="/assets/icons/user.png"></image>
+          <image class="avatar" src="/static/tabbar/user.png"></image>
           <view class="login-text">点击登录 / 注册</view>
         </view>
       </template>

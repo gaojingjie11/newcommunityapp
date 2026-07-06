@@ -5,7 +5,7 @@ const { getCommunityMessages, sendCommunityMessage } = __dep1;
 const { getUserInfo } = __dep2;
 
 const POLL_INTERVAL = 5000;
-const DEFAULT_AVATAR = '/assets/icons/user.png';
+const DEFAULT_AVATAR = '/static/tabbar/user.png';
 
 function formatChatTime(value) {
     if (!value) return '';
