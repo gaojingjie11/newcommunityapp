@@ -42,7 +42,12 @@ export default {
             });
             const list = (res.list || res || []).map((item) => ({
                 ...item,
-                created_at: this.formatCommentTime(item.created_at)
+                created_at: this.formatCommentTime(item.created_at),
+                user: {
+                    username: item.username || '匿名用户',
+                    avatar: item.avatar || '',
+                    real_name: item.real_name || item.username || '匿名用户'
+                }
             }));
             this.setData({ comments: list });
         } catch (e) {
