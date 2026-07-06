@@ -103,7 +103,8 @@ function createUtf8Decoder() {
 function chatStream(data, onChunk, onDone, onError) {
     const token = uni.getStorageSync('token');
     const header = {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Accept': 'text/event-stream'
     };
     if (token) {
         header.Authorization = `Bearer ${token}`;
@@ -122,8 +123,11 @@ function chatStream(data, onChunk, onDone, onError) {
             face_image_url: data.face_image_url || ''
         },
         enableChunked: true,
+        responseType: 'arraybuffer',
         success: (res) => {
-            // Success handler
+            if (res.statusCode !== 200) {
+                onError(new Error(`请求失败 (状态码: ${res.statusCode})`));
+            }
         },
         fail: (err) => {
             onError(err || new Error('网络请求异常'));
