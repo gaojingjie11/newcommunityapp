@@ -110,6 +110,8 @@ function chatStream(data, onChunk, onDone, onError) {
         header.Authorization = `Bearer ${token}`;
     }
 
+    let hasReceivedChunk = false;
+
     const requestTask = uni.request({
         url: `${BASE_URL}/agent/chat/stream`,
         method: 'POST',
@@ -127,7 +129,39 @@ function chatStream(data, onChunk, onDone, onError) {
         success: (res) => {
             if (res.statusCode !== 200) {
                 onError(new Error(`请求失败 (状态码: ${res.statusCode})`));
+                return;
             }
+            
+            // Fallback for buffered response:
+            // If onChunkReceived was never called (e.g. not supported or no chunks received),
+            // parse the full response body accumulated in res.data
+            if (!hasReceivedChunk && res.data) {
+                let text = '';
+                if (res.data instanceof ArrayBuffer) {
+                    const fallbackDecoder = createUtf8Decoder();
+                    text = fallbackDecoder(new Uint8Array(res.data));
+                } else if (typeof res.data === 'string') {
+                    text = res.data;
+                }
+                
+                if (text) {
+                    const lines = text.split('\n');
+                    for (const line of lines) {
+                        const cleaned = line.trim();
+                        if (!cleaned) continue;
+                        if (cleaned.startsWith('data: ')) {
+                            const content = cleaned.slice(6);
+                            if (content === '[DONE]') continue;
+                            try {
+                                const parsed = JSON.parse(content);
+                                onChunk(parsed);
+                            } catch (e) {}
+                        }
+                    }
+                }
+            }
+            
+            onDone();
         },
         fail: (err) => {
             onError(err || new Error('网络请求异常'));
@@ -139,46 +173,54 @@ function chatStream(data, onChunk, onDone, onError) {
 
     if (typeof requestTask.onChunkReceived === 'function') {
         requestTask.onChunkReceived((chunk) => {
-            let bytes;
-            if (typeof chunk.data === 'string') {
-                if (typeof TextEncoder === 'function') {
-                    bytes = new TextEncoder().encode(chunk.data);
+            try {
+                if (!chunk || !chunk.data) return;
+                hasReceivedChunk = true;
+                
+                let bytes;
+                if (typeof chunk.data === 'string') {
+                    if (typeof TextEncoder === 'function') {
+                        bytes = new TextEncoder().encode(chunk.data);
+                    } else {
+                        bytes = unescape(encodeURIComponent(chunk.data)).split('').map(c => c.charCodeAt(0));
+                    }
                 } else {
-                    bytes = unescape(encodeURIComponent(chunk.data)).split('').map(c => c.charCodeAt(0));
+                    bytes = new Uint8Array(chunk.data);
                 }
-            } else {
-                bytes = new Uint8Array(chunk.data);
-            }
-            
-            const decodedText = utf8Decoder(bytes);
-            lineBuffer += decodedText;
-            const lines = lineBuffer.split('\n');
-            lineBuffer = lines.pop(); // Keep remaining incomplete line
+                
+                const decodedText = utf8Decoder(bytes);
+                lineBuffer += decodedText;
+                const lines = lineBuffer.split('\n');
+                lineBuffer = lines.pop(); // Keep remaining incomplete line
 
-            for (const line of lines) {
-                const cleaned = line.trim();
-                if (!cleaned) continue;
+                for (const line of lines) {
+                    const cleaned = line.trim();
+                    if (!cleaned) continue;
 
-                if (cleaned.startsWith('data: ')) {
-                    const content = cleaned.slice(6);
-                    if (content === '[DONE]') {
-                        onDone();
-                        return;
-                    }
-                    if (content.startsWith('[ERROR]')) {
-                        onError(new Error(content.slice(8)));
+                    if (cleaned.startsWith('data: ')) {
+                        const content = cleaned.slice(6);
+                        if (content === '[DONE]') {
+                            onDone();
+                            return;
+                        }
+                        if (content.startsWith('[ERROR]')) {
+                            onError(new Error(content.slice(8)));
+                            try {
+                                requestTask.abort();
+                            } catch (e) {}
+                            return;
+                        }
                         try {
-                            requestTask.abort();
-                        } catch (e) {}
-                        return;
-                    }
-                    try {
-                        const parsed = JSON.parse(content);
-                        onChunk(parsed);
-                    } catch (e) {
-                        console.error('Error parsing stream chunk:', e);
+                            const parsed = JSON.parse(content);
+                            onChunk(parsed);
+                        } catch (e) {
+                            console.error('Error parsing stream chunk:', e);
+                        }
                     }
                 }
+            } catch (e) {
+                console.error('Error in onChunkReceived:', e);
+                onError(e);
             }
         });
     } else {
