@@ -30,6 +30,39 @@ async function getOrCreateConversationId() {
     return conversationId;
 }
 
+function arrayBufferToString(buffer) {
+    if (!buffer) return '';
+    const array = new Uint8Array(buffer);
+    let out = "";
+    let len = array.length;
+    let i = 0;
+    let c, char2, char3;
+
+    while (i < len) {
+        c = array[i++];
+        switch (c >> 4) {
+            case 0: case 1: case 2: case 3: case 4: case 5: case 6: case 7:
+                // 0xxxxxxx
+                out += String.fromCharCode(c);
+                break;
+            case 12: case 13:
+                // 110x xxxx   10xx xxxx
+                char2 = array[i++];
+                out += String.fromCharCode(((c & 0x1F) << 6) | (char2 & 0x3F));
+                break;
+            case 14:
+                // 1110 xxxx  10xx xxxx  10xx xxxx
+                char2 = array[i++];
+                char3 = array[i++];
+                out += String.fromCharCode(((c & 0x0F) << 12) |
+                               ((char2 & 0x3F) << 6) |
+                               ((char3 & 0x3F) << 0));
+                break;
+        }
+    }
+    return out;
+}
+
 export default {
     async getChatHistory(params) {
         const conversationId = await getOrCreateConversationId();
@@ -43,85 +76,95 @@ export default {
         });
     },
 
-    async sendChat(data) {
-        const conversationId = await getOrCreateConversationId();
-        if (!conversationId) {
-            throw new Error('未创建有效的对话 Session');
-        }
-
-        const token = uni.getStorageSync('token');
-        // Construct the stream URL from request's BASE_URL (replacing or appending appropriately)
-        const streamUrl = `${BASE_URL}/agent/chat/stream`;
-
-        const response = await fetch(streamUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': token ? `Bearer ${token}` : ''
-            },
-            body: JSON.stringify({
-                conversation_id: conversationId,
-                message: data.content,
-                mode: 'auto',
-                pay_type: 'password',
-                payment_password: data.payment_password || '',
-                face_image_url: data.face_image_url || ''
-            })
-        });
-
-        if (!response.ok) {
-            const text = await response.text();
-            let errorMsg = 'AI 请求失败';
+    sendChat(data) {
+        return new Promise(async (resolve, reject) => {
+            let conversationId;
             try {
-                const parsed = JSON.parse(text);
-                errorMsg = parsed.message || parsed.msg || errorMsg;
+                conversationId = await getOrCreateConversationId();
             } catch (e) {
-                errorMsg = text || errorMsg;
+                reject(e);
+                return;
             }
-            throw new Error(errorMsg);
-        }
 
-        let replyText = '';
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder('utf-8');
-        let buffer = '';
+            if (!conversationId) {
+                reject(new Error('未创建有效的对话 Session'));
+                return;
+            }
 
-        while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
+            const token = uni.getStorageSync('token');
+            const streamUrl = `${BASE_URL}/agent/chat/stream`;
 
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop(); // keep partial line in buffer
+            let replyText = '';
+            let buffer = '';
 
-            for (const line of lines) {
-                const cleaned = line.trim();
-                if (!cleaned) continue;
-
-                if (cleaned.startsWith('data: ')) {
-                    const content = cleaned.slice(6);
-                    if (content === '[DONE]') {
-                        break;
-                    }
-                    if (content.startsWith('[ERROR]')) {
-                        throw new Error(content.slice(8));
-                    }
-                    try {
-                        const parsed = JSON.parse(content);
-                        if (parsed && parsed.type === 'message_delta' && parsed.data && parsed.data.chunk) {
-                            replyText += parsed.data.chunk;
-                        } else if (parsed && parsed.chunk) {
-                            replyText += parsed.chunk;
-                        }
-                    } catch (e) {
-                        console.error('Error parsing stream chunk:', e);
-                    }
+            const requestTask = uni.request({
+                url: streamUrl,
+                method: 'POST',
+                header: {
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
+                data: {
+                    conversation_id: conversationId,
+                    message: data.content,
+                    mode: 'auto',
+                    pay_type: 'password',
+                    payment_password: data.payment_password || '',
+                    face_image_url: data.face_image_url || ''
+                },
+                enableChunked: true,
+                success: (res) => {
+                    resolve({ reply: replyText });
+                },
+                fail: (err) => {
+                    reject(err || new Error('AI 请求失败'));
                 }
-            }
-        }
+            });
 
-        return {
-            reply: replyText
-        };
+            if (typeof requestTask.onChunkReceived === 'function') {
+                requestTask.onChunkReceived((chunkRes) => {
+                    const chunkStr = arrayBufferToString(chunkRes.data);
+                    buffer += chunkStr;
+                    
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop(); // keep partial line in buffer
+
+                    for (const line of lines) {
+                        const cleaned = line.trim();
+                        if (!cleaned) continue;
+
+                        if (cleaned.startsWith('data: ')) {
+                            const content = cleaned.slice(6);
+                            if (content === '[DONE]') {
+                                continue;
+                            }
+                            if (content.startsWith('[ERROR]')) {
+                                reject(new Error(content.slice(8)));
+                                try {
+                                    requestTask.abort();
+                                } catch(e){}
+                                return;
+                            }
+                            try {
+                                const parsed = JSON.parse(content);
+                                if (parsed && parsed.type === 'message_delta' && parsed.data && parsed.data.chunk) {
+                                    replyText += parsed.data.chunk;
+                                } else if (parsed && parsed.chunk) {
+                                    replyText += parsed.chunk;
+                                }
+                            } catch (e) {
+                                console.error('Error parsing stream chunk:', e);
+                            }
+                        }
+                    }
+                });
+            } else {
+                // Fallback for environments where chunked transfer is not supported
+                // We let requestTask do a standard call if it doesn't support chunked events
+                // Note: The backend is text/event-stream, standard request might not resolve properly,
+                // but this acts as an interface safeguard.
+                console.warn('uni.request enableChunked is not supported on this platform');
+            }
+        });
     }
 };
