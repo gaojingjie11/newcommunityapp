@@ -1,37 +1,48 @@
 import request, { BASE_URL } from '../utils/request';
 
-async function getOrCreateConversationId() {
-    let conversationId = uni.getStorageSync('chat_conversation_id');
-    if (!conversationId) {
-        try {
-            const listRes = await request({
-                url: '/agent/conversations',
-                method: 'GET'
-            });
-            const list = Array.isArray(listRes) ? listRes : (listRes?.list || []);
-            if (list.length > 0) {
-                conversationId = list[0].id;
-            } else {
-                const createRes = await request({
-                    url: '/agent/conversations',
-                    method: 'POST',
-                    data: { title: 'App AI 助手' }
-                });
-                conversationId = createRes?.id;
-            }
-            if (conversationId) {
-                uni.setStorageSync('chat_conversation_id', conversationId);
-            }
-        } catch (e) {
-            console.error('Failed to get or create conversation:', e);
-            throw e;
-        }
+let currentConversationId = null;
+
+async function getOrCreateConversationId(forceRefresh = false) {
+    if (currentConversationId && !forceRefresh) {
+        return currentConversationId;
     }
-    return conversationId;
+
+    try {
+        const listRes = await request({
+            url: '/agent/conversations',
+            method: 'GET'
+        });
+        const list = Array.isArray(listRes) ? listRes : (listRes?.list || []);
+        if (list.length > 0) {
+            currentConversationId = list[0].id;
+        } else {
+            const createRes = await request({
+                url: '/agent/conversations',
+                method: 'POST',
+                data: { title: 'App AI 助手' }
+            });
+            currentConversationId = createRes?.id;
+        }
+    } catch (e) {
+        console.error('Failed to get or create conversation:', e);
+        throw e;
+    }
+    return currentConversationId;
 }
 
 function arrayBufferToString(buffer) {
     if (!buffer) return '';
+    
+    if (typeof TextDecoder === 'function') {
+        try {
+            const decoder = new TextDecoder('utf-8');
+            return decoder.decode(buffer);
+        } catch (e) {
+            console.error('TextDecoder failed:', e);
+        }
+    }
+
+    // Fallback UTF-8 decoder
     const array = new Uint8Array(buffer);
     let out = "";
     let len = array.length;
@@ -42,16 +53,13 @@ function arrayBufferToString(buffer) {
         c = array[i++];
         switch (c >> 4) {
             case 0: case 1: case 2: case 3: case 4: case 5: case 6: case 7:
-                // 0xxxxxxx
                 out += String.fromCharCode(c);
                 break;
             case 12: case 13:
-                // 110x xxxx   10xx xxxx
                 char2 = array[i++];
                 out += String.fromCharCode(((c & 0x1F) << 6) | (char2 & 0x3F));
                 break;
             case 14:
-                // 1110 xxxx  10xx xxxx  10xx xxxx
                 char2 = array[i++];
                 char3 = array[i++];
                 out += String.fromCharCode(((c & 0x0F) << 12) |
@@ -65,7 +73,7 @@ function arrayBufferToString(buffer) {
 
 export default {
     async getChatHistory(params) {
-        const conversationId = await getOrCreateConversationId();
+        const conversationId = await getOrCreateConversationId(true);
         if (!conversationId) {
             return { list: [] };
         }
@@ -80,7 +88,7 @@ export default {
         return new Promise(async (resolve, reject) => {
             let conversationId;
             try {
-                conversationId = await getOrCreateConversationId();
+                conversationId = await getOrCreateConversationId(false);
             } catch (e) {
                 reject(e);
                 return;
@@ -96,6 +104,35 @@ export default {
 
             let replyText = '';
             let buffer = '';
+
+            const parseLine = (line) => {
+                const cleaned = line.trim();
+                if (!cleaned) return;
+
+                if (cleaned.startsWith('data:')) {
+                    const content = cleaned.slice(cleaned.indexOf(':') + 1).trim();
+                    if (content === '[DONE]') {
+                        return;
+                    }
+                    if (content.startsWith('[ERROR]')) {
+                        reject(new Error(content.slice(8)));
+                        try {
+                            requestTask.abort();
+                        } catch(e){}
+                        return;
+                    }
+                    try {
+                        const parsed = JSON.parse(content);
+                        if (parsed && parsed.type === 'message_delta' && parsed.data && parsed.data.chunk) {
+                            replyText += parsed.data.chunk;
+                        } else if (parsed && parsed.chunk) {
+                            replyText += parsed.chunk;
+                        }
+                    } catch (e) {
+                        console.error('Error parsing stream chunk:', e);
+                    }
+                }
+            };
 
             const requestTask = uni.request({
                 url: streamUrl,
@@ -114,6 +151,10 @@ export default {
                 },
                 enableChunked: true,
                 success: (res) => {
+                    if (buffer) {
+                        parseLine(buffer);
+                        buffer = '';
+                    }
                     resolve({ reply: replyText });
                 },
                 fail: (err) => {
@@ -123,46 +164,17 @@ export default {
 
             if (typeof requestTask.onChunkReceived === 'function') {
                 requestTask.onChunkReceived((chunkRes) => {
-                    const chunkStr = arrayBufferToString(chunkRes.data);
+                    const chunkStr = typeof chunkRes.data === 'string' ? chunkRes.data : arrayBufferToString(chunkRes.data);
                     buffer += chunkStr;
                     
                     const lines = buffer.split('\n');
                     buffer = lines.pop(); // keep partial line in buffer
 
                     for (const line of lines) {
-                        const cleaned = line.trim();
-                        if (!cleaned) continue;
-
-                        if (cleaned.startsWith('data: ')) {
-                            const content = cleaned.slice(6);
-                            if (content === '[DONE]') {
-                                continue;
-                            }
-                            if (content.startsWith('[ERROR]')) {
-                                reject(new Error(content.slice(8)));
-                                try {
-                                    requestTask.abort();
-                                } catch(e){}
-                                return;
-                            }
-                            try {
-                                const parsed = JSON.parse(content);
-                                if (parsed && parsed.type === 'message_delta' && parsed.data && parsed.data.chunk) {
-                                    replyText += parsed.data.chunk;
-                                } else if (parsed && parsed.chunk) {
-                                    replyText += parsed.chunk;
-                                }
-                            } catch (e) {
-                                console.error('Error parsing stream chunk:', e);
-                            }
-                        }
+                        parseLine(line);
                     }
                 });
             } else {
-                // Fallback for environments where chunked transfer is not supported
-                // We let requestTask do a standard call if it doesn't support chunked events
-                // Note: The backend is text/event-stream, standard request might not resolve properly,
-                // but this acts as an interface safeguard.
                 console.warn('uni.request enableChunked is not supported on this platform');
             }
         });
