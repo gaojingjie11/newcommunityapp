@@ -32,6 +32,7 @@ export default {
 
         try {
             const res = await getUserInfo();
+            console.log('=== [DEBUG UserInfo] API Response ===', JSON.stringify(res));
             const role = (res && res.role) || '';
             this.setData({
                 userInfo: res || null,
