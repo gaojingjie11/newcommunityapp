@@ -75,7 +75,7 @@ export default {
     async fetchRepairList(reset = false) {
         try {
             const res = await getRepairList({ page: 1, size: 20 });
-            const list = (res.list || []).map(item => ({
+            const list = (res.list || (Array.isArray(res) ? res : [])).map(item => ({
                 ...item,
                 created_at_text: formatRepairTime(item.created_at)
             }));
