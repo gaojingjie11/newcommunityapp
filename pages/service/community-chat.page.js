@@ -88,15 +88,14 @@ export default {
         const currentUserId = Number(this.data.currentUserId || 0);
         return list.map((item, index) => {
             const uid = Number((item && item.user_id) || 0);
-            const user = (item && item.user) || {};
             return {
                 id: item.id,
                 user_id: uid,
                 content: (item && item.content) || '',
                 created_at: item.created_at,
                 timeText: formatChatTime(item.created_at),
-                avatar: user.avatar || DEFAULT_AVATAR,
-                username: user.username || '用户',
+                avatar: item.avatar || DEFAULT_AVATAR,
+                username: item.username || '用户',
                 isSelf: currentUserId > 0 && uid === currentUserId,
                 viewId: `msg-${index}`
             };
