@@ -82,7 +82,7 @@ export default {
     buildFeeViewModel(list) {
         const currentPoints = Number((this.data.userInfo && this.data.userInfo.green_points) || 0);
         return (list || []).map((item) => {
-            const date = new Date(item.pay_time);
+            const date = new Date(item.paid_at || item.pay_time);
             const isValid = !Number.isNaN(date.getTime()) && date.getFullYear() > 2000;
             const payTimeText = isValid ? formatTime(date).split(' ')[0].replace(/\//g, '-') : '';
             const preview = getMixedPaymentPreview(item.amount, currentPoints);
@@ -90,7 +90,8 @@ export default {
                 ...item,
                 amount_text: formatAmount(item.amount),
                 pay_time: payTimeText,
-                used_balance_text: formatAmount(item.used_balance || 0),
+                used_points: item.used_points || 0,
+                used_balance_text: formatAmount(item.used_balance || item.amount),
                 payment_preview: {
                     points: preview.points,
                     balance: preview.balance,
