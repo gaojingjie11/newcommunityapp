@@ -7,7 +7,7 @@
       <view class="section-title">选择服务门店</view>
       <picker :range="storeList" range-key="name" @change="bindStoreChange" :value="selectedStoreIndex">
         <view class="picker-row">
-          <text>{{storeList[selectedStoreIndex].name || '请选择门店'}}</text>
+          <text>{{(storeList[selectedStoreIndex] && storeList[selectedStoreIndex].name) || '请选择门店'}}</text>
           <text class="arrow">></text>
         </view>
       </picker>

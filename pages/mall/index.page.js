@@ -70,7 +70,8 @@ export default {
     async getCategories() {
         try {
             const res = await getCategories();
-            this.setData({ categories: res || [] });
+            const list = res?.list || res || [];
+            this.setData({ categories: list });
         } catch (e) {
             console.error(e);
         }

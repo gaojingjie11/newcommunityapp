@@ -25,7 +25,7 @@ export default {
                 getStoreList()
             ]);
 
-            const stores = storeRes || [];
+            const stores = storeRes?.list || storeRes || [];
             const items = cartRes || [];
 
             this.setData({
