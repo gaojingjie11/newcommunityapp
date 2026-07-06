@@ -1,182 +1,195 @@
 import request, { BASE_URL } from '../utils/request';
 
-let currentConversationId = null;
-
-async function getOrCreateConversationId(forceRefresh = false) {
-    if (currentConversationId && !forceRefresh) {
-        return currentConversationId;
-    }
-
-    try {
-        const listRes = await request({
-            url: '/agent/conversations',
-            method: 'GET'
-        });
-        const list = Array.isArray(listRes) ? listRes : (listRes?.list || []);
-        if (list.length > 0) {
-            currentConversationId = list[0].id;
-        } else {
-            const createRes = await request({
-                url: '/agent/conversations',
-                method: 'POST',
-                data: { title: 'App AI 助手' }
-            });
-            currentConversationId = createRes?.id;
-        }
-    } catch (e) {
-        console.error('Failed to get or create conversation:', e);
-        throw e;
-    }
-    return currentConversationId;
+function getConversations() {
+    return request({
+        url: '/agent/conversations',
+        method: 'GET'
+    });
 }
 
-function arrayBufferToString(buffer) {
-    if (!buffer) return '';
-    
-    if (typeof TextDecoder === 'function') {
-        try {
-            const decoder = new TextDecoder('utf-8');
-            return decoder.decode(buffer);
-        } catch (e) {
-            console.error('TextDecoder failed:', e);
-        }
-    }
-
-    // Fallback UTF-8 decoder
-    const array = new Uint8Array(buffer);
-    let out = "";
-    let len = array.length;
-    let i = 0;
-    let c, char2, char3;
-
-    while (i < len) {
-        c = array[i++];
-        switch (c >> 4) {
-            case 0: case 1: case 2: case 3: case 4: case 5: case 6: case 7:
-                out += String.fromCharCode(c);
-                break;
-            case 12: case 13:
-                char2 = array[i++];
-                out += String.fromCharCode(((c & 0x1F) << 6) | (char2 & 0x3F));
-                break;
-            case 14:
-                char2 = array[i++];
-                char3 = array[i++];
-                out += String.fromCharCode(((c & 0x0F) << 12) |
-                               ((char2 & 0x3F) << 6) |
-                               ((char3 & 0x3F) << 0));
-                break;
-        }
-    }
-    return out;
+function createConversation(data) {
+    return request({
+        url: '/agent/conversations',
+        method: 'POST',
+        data
+    });
 }
 
-export default {
-    async getChatHistory(params) {
-        const conversationId = await getOrCreateConversationId(true);
-        if (!conversationId) {
-            return { list: [] };
+function deleteConversation(id) {
+    return request({
+        url: `/agent/conversations/${id}`,
+        method: 'DELETE'
+    });
+}
+
+function getChatHistory(id) {
+    return request({
+        url: `/agent/conversations/${id}/history`,
+        method: 'GET'
+    }).then(res => {
+        return res?.list || res || [];
+    });
+}
+
+function approveAction(conversationId, actionId, data) {
+    return request({
+        url: `/agent/sessions/${conversationId}/actions/${actionId}/approve`,
+        method: 'POST',
+        data
+    });
+}
+
+function rejectAction(conversationId, actionId) {
+    return request({
+        url: `/agent/sessions/${conversationId}/actions/${actionId}/reject`,
+        method: 'POST'
+    });
+}
+
+function createUtf8Decoder() {
+    let buffer = [];
+    return function decode(chunkBytes) {
+        for (let i = 0; i < chunkBytes.length; i++) {
+            buffer.push(chunkBytes[i]);
         }
-        return request({
-            url: `/agent/conversations/${conversationId}/history`,
-            method: 'GET',
-            data: params
-        });
-    },
-
-    sendChat(data) {
-        return new Promise(async (resolve, reject) => {
-            let conversationId;
-            try {
-                conversationId = await getOrCreateConversationId(false);
-            } catch (e) {
-                reject(e);
-                return;
+        
+        let i = 0;
+        let str = '';
+        while (i < buffer.length) {
+            const c = buffer[i];
+            let bytesNeeded = 0;
+            let codePoint = 0;
+            
+            if (c < 0x80) {
+                bytesNeeded = 1;
+                codePoint = c;
+            } else if ((c & 0xE0) === 0xC0) {
+                bytesNeeded = 2;
+                codePoint = c & 0x1F;
+            } else if ((c & 0xF0) === 0xE0) {
+                bytesNeeded = 3;
+                codePoint = c & 0x0F;
+            } else if ((c & 0xF8) === 0xF0) {
+                bytesNeeded = 4;
+                codePoint = c & 0x07;
+            } else {
+                i++;
+                continue;
             }
-
-            if (!conversationId) {
-                reject(new Error('未创建有效的对话 Session'));
-                return;
+            
+            if (i + bytesNeeded > buffer.length) {
+                break;
             }
+            
+            i++;
+            for (let j = 1; j < bytesNeeded; j++) {
+                const nextByte = buffer[i++];
+                codePoint = (codePoint << 6) | (nextByte & 0x3F);
+            }
+            
+            if (codePoint <= 0xFFFF) {
+                str += String.fromCharCode(codePoint);
+            } else {
+                const u = codePoint - 0x10000;
+                str += String.fromCharCode(0xD800 + (u >> 10), 0xDC00 + (u & 1023));
+            }
+        }
+        
+        buffer = buffer.slice(i);
+        return str;
+    };
+}
 
-            const token = uni.getStorageSync('token');
-            const streamUrl = `${BASE_URL}/agent/chat/stream`;
+function chatStream(data, onChunk, onDone, onError) {
+    const token = uni.getStorageSync('token');
+    const header = {
+        'Content-Type': 'application/json'
+    };
+    if (token) {
+        header.Authorization = `Bearer ${token}`;
+    }
 
-            let replyText = '';
-            let buffer = '';
+    const requestTask = uni.request({
+        url: `${BASE_URL}/agent/chat/stream`,
+        method: 'POST',
+        header,
+        data: {
+            conversation_id: data.conversation_id,
+            message: data.message,
+            mode: data.mode || 'auto',
+            pay_type: data.pay_type || '',
+            payment_password: data.payment_password || '',
+            face_image_url: data.face_image_url || ''
+        },
+        enableChunked: true,
+        success: (res) => {
+            // Success handler
+        },
+        fail: (err) => {
+            onError(err || new Error('网络请求异常'));
+        }
+    });
 
-            const parseLine = (line) => {
+    const utf8Decoder = createUtf8Decoder();
+    let lineBuffer = '';
+
+    if (typeof requestTask.onChunkReceived === 'function') {
+        requestTask.onChunkReceived((chunk) => {
+            let bytes;
+            if (typeof chunk.data === 'string') {
+                if (typeof TextEncoder === 'function') {
+                    bytes = new TextEncoder().encode(chunk.data);
+                } else {
+                    bytes = unescape(encodeURIComponent(chunk.data)).split('').map(c => c.charCodeAt(0));
+                }
+            } else {
+                bytes = new Uint8Array(chunk.data);
+            }
+            
+            const decodedText = utf8Decoder(bytes);
+            lineBuffer += decodedText;
+            const lines = lineBuffer.split('\n');
+            lineBuffer = lines.pop(); // Keep remaining incomplete line
+
+            for (const line of lines) {
                 const cleaned = line.trim();
-                if (!cleaned) return;
+                if (!cleaned) continue;
 
-                if (cleaned.startsWith('data:')) {
-                    const content = cleaned.slice(cleaned.indexOf(':') + 1).trim();
+                if (cleaned.startsWith('data: ')) {
+                    const content = cleaned.slice(6);
                     if (content === '[DONE]') {
+                        onDone();
                         return;
                     }
                     if (content.startsWith('[ERROR]')) {
-                        reject(new Error(content.slice(8)));
+                        onError(new Error(content.slice(8)));
                         try {
                             requestTask.abort();
-                        } catch(e){}
+                        } catch (e) {}
                         return;
                     }
                     try {
                         const parsed = JSON.parse(content);
-                        if (parsed && parsed.type === 'message_delta' && parsed.data && parsed.data.chunk) {
-                            replyText += parsed.data.chunk;
-                        } else if (parsed && parsed.chunk) {
-                            replyText += parsed.chunk;
-                        }
+                        onChunk(parsed);
                     } catch (e) {
                         console.error('Error parsing stream chunk:', e);
                     }
                 }
-            };
-
-            const requestTask = uni.request({
-                url: streamUrl,
-                method: 'POST',
-                header: {
-                    'Content-Type': 'application/json',
-                    'Authorization': token ? `Bearer ${token}` : ''
-                },
-                data: {
-                    conversation_id: conversationId,
-                    message: data.content,
-                    mode: 'auto',
-                    pay_type: 'password',
-                    payment_password: data.payment_password || '',
-                    face_image_url: data.face_image_url || ''
-                },
-                enableChunked: true,
-                success: (res) => {
-                    if (buffer) {
-                        parseLine(buffer);
-                        buffer = '';
-                    }
-                    resolve({ reply: replyText });
-                },
-                fail: (err) => {
-                    reject(err || new Error('AI 请求失败'));
-                }
-            });
-
-            if (typeof requestTask.onChunkReceived === 'function') {
-                requestTask.onChunkReceived((chunkRes) => {
-                    const chunkStr = typeof chunkRes.data === 'string' ? chunkRes.data : arrayBufferToString(chunkRes.data);
-                    buffer += chunkStr;
-                    
-                    const lines = buffer.split('\n');
-                    buffer = lines.pop(); // keep partial line in buffer
-
-                    for (const line of lines) {
-                        parseLine(line);
-                    }
-                });
-            } else {
-                console.warn('uni.request enableChunked is not supported on this platform');
             }
         });
+    } else {
+        console.warn('uni.request enableChunked is not supported on this platform');
     }
+
+    return requestTask;
+}
+
+export default {
+    getConversations,
+    createConversation,
+    deleteConversation,
+    getChatHistory,
+    approveAction,
+    rejectAction,
+    chatStream
 };
