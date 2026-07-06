@@ -194,17 +194,14 @@ export default {
                 message: content
             },
             (event) => {
-                const currentBotMsg = this.data.messages[botMsgIndex];
-                if (!currentBotMsg) return;
+                const messages = [...this.data.messages];
+                const lastMsg = messages[messages.length - 1];
+                if (!lastMsg || lastMsg.role !== 'assistant') return;
 
                 if (event.type === 'message_delta') {
                     activeText += event.data.chunk;
-                    const field = `messages[${botMsgIndex}].content`;
-                    const statusField = `messages[${botMsgIndex}].tool_status`;
-                    this.setData({
-                        [field]: activeText,
-                        [statusField]: ''
-                    });
+                    lastMsg.content = activeText;
+                    lastMsg.tool_status = '';
                 } else if (event.type === 'tool_call_start') {
                     let toolText = '智能管家正在处理业务...';
                     if (event.data.tool === 'list_products') {
@@ -218,20 +215,16 @@ export default {
                     } else if (event.data.tool === 'submit_repair') {
                         toolText = '正在提交物业报修单...';
                     }
-                    const statusField = `messages[${botMsgIndex}].tool_status`;
-                    this.setData({ [statusField]: toolText });
+                    lastMsg.tool_status = toolText;
                 } else if (event.type === 'tool_call_end') {
-                    const statusField = `messages[${botMsgIndex}].tool_status`;
-                    this.setData({ [statusField]: '' });
+                    lastMsg.tool_status = '';
                 } else if (event.type === 'approval_required') {
-                    const actionField = `messages[${botMsgIndex}].proposed_action`;
-                    const statusField = `messages[${botMsgIndex}].tool_status`;
-                    this.setData({
-                        [actionField]: event.data,
-                        [statusField]: '',
-                        loading: false
-                    });
+                    lastMsg.proposed_action = event.data;
+                    lastMsg.tool_status = '';
+                    this.setData({ loading: false });
                 }
+
+                this.setData({ messages }, this.scrollToBottom);
             },
             () => {
                 this.setData({ loading: false });
@@ -239,17 +232,13 @@ export default {
             },
             (err) => {
                 console.error(err);
-                const currentBotMsg = this.data.messages[botMsgIndex];
-                if (currentBotMsg) {
-                    const field = `messages[${botMsgIndex}].content`;
-                    const statusField = `messages[${botMsgIndex}].tool_status`;
-                    this.setData({
-                        [field]: currentBotMsg.content + '\n⚠️ 错误: ' + (err.message || '网络连接异常'),
-                        [statusField]: ''
-                    });
+                const messages = [...this.data.messages];
+                const lastMsg = messages[messages.length - 1];
+                if (lastMsg && lastMsg.role === 'assistant') {
+                    lastMsg.content = lastMsg.content + '\n⚠️ 错误: ' + (err.message || '网络连接异常');
+                    lastMsg.tool_status = '';
                 }
-                this.setData({ loading: false });
-                this.scrollToBottom();
+                this.setData({ messages, loading: false }, this.scrollToBottom);
             }
         );
     },
